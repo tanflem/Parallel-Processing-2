@@ -18,14 +18,22 @@ std::condition_variable exit_labyrinth;
 
 // Variable to track the first guests id and Flag to find the first guest
 std::atomic<int> eater;
-std::atomic<bool> first_flag = true;
+std::atomic<bool> first_flag(true);
 
 // bool to track if the cupcake has been refreshed or not
-std::atomic<bool> cupcake = true;
+std::atomic<bool> cupcake(true);
 
 std::atomic<int> num_guests(NUMGUESTS);
 
-void guest(int chosen) {
+// Minotaur random selection
+std::default_random_engine generator;
+std::uniform_int_distribution<int> distribution(0, NUMGUESTS - 1);
+auto minotaur = std::bind ( distribution, generator);
+
+// Minotaurs chosen guest
+std::atomic<int> chosen(minotaur());
+
+void guest(int guest_id) {
     // Array of bools to track if any threads have been through the labyrinth
     bool been_there[NUMGUESTS];
 
@@ -34,17 +42,12 @@ void guest(int chosen) {
         been_there[i] = false;
     }
 
-    // Minotaur random selection
-    std::default_random_engine generator;
-    std::uniform_int_distribution<int> distribution(0, NUMGUESTS);
-    auto minotaur = std::bind ( distribution, generator);
-
     // While their are guests who have not entered the labyrinth
     while (num_guests > 0){
         // Lock to keep more than one guest from getting into the maze
         std::unique_lock<std::mutex> labyrinth_lock(in_labyrinth);
         
-        while((chosen == minotaur()) && (num_guests > 0)){
+        while((guest_id != chosen) && (num_guests > 0)){
             // Exploring the castle and waiting for the minotaur to call them in
             exit_labyrinth.wait(labyrinth_lock);
         }
@@ -53,13 +56,13 @@ void guest(int chosen) {
 
             if(first_flag){
                 // First person in becomes the eater
-                eater = chosen;
+                eater = guest_id;
                 // Set to false after the first person
                 first_flag = false; 
             }
 
             // If the person is the eater
-            if(chosen == eater){
+            if(guest_id == eater){
                 // And there is a cupcake present
                 if(cupcake){
                     // Eat the cupcake
@@ -74,14 +77,16 @@ void guest(int chosen) {
                 // If the cupcake is not refreshed and 
                 if(!cupcake){
                     // And it is their first time in the maze. 
-                    if(been_there[chosen] == false){
+                    if(been_there[guest_id] == false){
                         // Remember fro yourself that you have been there
-                        been_there[chosen] = true;
+                        been_there[guest_id] = true;
                         // Refresh cupcake
                         cupcake = true;
                     }
                 }
             }
+
+            chosen = minotaur();
             // Unlock the labyrinth and let the minotaur notify another guest
             labyrinth_lock.unlock(); 
             exit_labyrinth.notify_all();
@@ -90,10 +95,7 @@ void guest(int chosen) {
 }
 
 int main(){
-
     clock_t start, end;
-
-
     start = clock();
     std::thread guestThreads[NUMGUESTS];
 
@@ -106,9 +108,7 @@ int main(){
     }
 
     end = clock();
-
     float time = ((float) end - start) / CLOCKS_PER_SEC;
-
-    std::cout << "ALL GUESTS HAVE COMPLETED THE LABYRINTH IN " << time << " seconds\n";
+    std::cout << "ALL GUESTS HAVE COMPLETED THE LABYRINTH IN " << time << " SECONDS\n";
 }
 
