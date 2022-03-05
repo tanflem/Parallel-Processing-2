@@ -1,22 +1,78 @@
 #include <iostream>
+#include <unistd.h>
+#include <random>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <functional>
+#include <chrono>
+
+#define NUMGUESTS 100
+#define NUMSTARES 1000
+
+// Mutex to allow only one guest in at a time
+std::mutex in_vase_room;
+
+// Condition variable representing the sign on the door
+std::condition_variable sign_on_door;
+
+std::atomic<int> stared_at_vase(0);
+
+
+std::default_random_engine generator;
+std::uniform_int_distribution<int> distribution(0, NUMGUESTS - 1);
+auto dice = std::bind ( distribution, generator);
+
+
+std::atomic<int> lucky_guest;
+void guest(int viewer) {
+    // Guest random selection
+
+    // While their are guests who have not entered the labyrinth
+    while (stared_at_vase < NUMSTARES){
+        // Lock to keep more than one guest from getting into the maze
+        std::unique_lock<std::mutex> vase_room_lock(in_vase_room);
+        
+        while(viewer != lucky_guest && stared_at_vase < NUMSTARES){
+            // Set the sign on the door to unaviliable
+                 //   std::cout << "Person " << viewer << " is waiting\n";
+            sign_on_door.wait(vase_room_lock);
+        }
+
+        if(stared_at_vase < NUMSTARES){
+        // Stare at the beautiful vase
+        stared_at_vase++;
+
+        // A new guest finds the door
+        lucky_guest = dice();
+
+        // previous guest flips the sign to open
+        vase_room_lock.unlock(); 
+        sign_on_door.notify_all();
+        }
+    }
+}
 
 int main(){
-    int numGuests = 5;
-    bool cupcake = true;
-    bool resetCupcake = ;
 
-    // Minotaur invites 5 guests
-    int guests[numGuests];
-
-    // Enter the Labyrinth one at a time when invited
-    int chosen = rand() % numGuests + 1;
-
-    // First guest chosen eats the cupcake and gets flagged as the eater
+    clock_t start, end;
 
 
-    // If the chosen guest is the first guest the become the eater
-    if(){
+    start = clock();
+    std::thread guestThreads[NUMGUESTS];
 
+    for(int i = 0; i < NUMGUESTS; i++){
+        guestThreads[i] = std::thread(guest, i);
     }
 
+    for (auto& gt : guestThreads) {
+        gt.join();
+    }
+
+    end = clock();
+
+    float time = ((float) end - start) / CLOCKS_PER_SEC;
+
+    std::cout << "ALL GUESTS HAVE STARED AT THE VASE "<< NUMSTARES << " TIMES IN " << time << " SECONDS!\n";
 }
